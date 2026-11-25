@@ -16,6 +16,7 @@ from PIL import Image
 from camfx.devices import PipelineConfig, VideoDevice, discover_video_devices
 from camfx.effects import get_effect
 from camfx.pipeline_builder import apply_hud_probe, build_pipeline_string
+from camfx.recorder import VideoRecorder
 
 Gst.init(None)
 
@@ -23,7 +24,7 @@ __all__ = ["CameraPipeline", "PipelineConfig", "VideoDevice", "discover_video_de
 
 
 class CameraPipeline:
-    """Manages a GStreamer pipeline with live effects, HUD overlay, preview, and v4l2sink."""
+    """Manages a GStreamer pipeline with live effects, HUD overlay, recording, and v4l2sink."""
 
     def __init__(
         self,
@@ -39,20 +40,29 @@ class CameraPipeline:
         self._lock = threading.Lock()
         self._latest_frame: Optional[Tuple[int, int, bytes, int]] = None
         self._running = False
+        self._recorder = VideoRecorder()
 
     @property
     def is_running(self) -> bool:
         return self._running
+
+    @property
+    def is_recording(self) -> bool:
+        return self._recorder.is_recording
+
+    @property
+    def recording_elapsed(self) -> float:
+        return self._recorder.elapsed_seconds
 
     def build_pipeline_string(self, cfg: PipelineConfig) -> str:
         """Build the GStreamer launch description string for a given PipelineConfig."""
         return build_pipeline_string(cfg)
 
     def start(self, config: Optional[PipelineConfig] = None) -> None:
-        """Start or restart the GStreamer pipeline with the supplied configuration."""
+        """Start or restart the GStreamer pipeline without interrupting active recording."""
         if config is not None:
             self.config = config
-        self.stop()
+        self._stop_gst_pipeline()
 
         pipeline = Gst.parse_launch(self.build_pipeline_string(self.config))
         effect = get_effect(self.config.effect_id)
@@ -82,8 +92,7 @@ class CameraPipeline:
         self._pipeline = pipeline
         self._running = True
 
-    def stop(self) -> None:
-        """Stop the active GStreamer pipeline cleanly."""
+    def _stop_gst_pipeline(self) -> None:
         if self._pipeline is not None:
             if (bus := self._pipeline.get_bus()) is not None:
                 bus.remove_signal_watch()
@@ -92,6 +101,19 @@ class CameraPipeline:
         self._balance = None
         self._flip = None
         self._running = False
+
+    def stop(self) -> None:
+        """Stop the active GStreamer pipeline and finalize any active recording."""
+        self.stop_recording()
+        self._stop_gst_pipeline()
+
+    def start_recording(self, output_dir: Optional[str] = None) -> str:
+        """Start recording processed camera frames into an MP4 or WebM file."""
+        return self._recorder.start(output_dir=output_dir)
+
+    def stop_recording(self) -> Optional[str]:
+        """Stop video recording and return the finalized output file path."""
+        return self._recorder.stop()
 
     def update_live_adjustments(
         self,
@@ -153,6 +175,8 @@ class CameraPipeline:
             stride = width * 4
             with self._lock:
                 self._latest_frame = (width, height, raw, stride)
+            if self._recorder.is_recording:
+                self._recorder.push_frame(width, height, raw)
             if self._on_frame is not None:
                 self._on_frame(width, height, raw, stride)
         finally:
