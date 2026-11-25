@@ -39,8 +39,8 @@ def run_headless(args: argparse.Namespace) -> int:
 
     if not vcam:
         print(
-            f"[ERROR] Virtual camera (v4l2loopback) tidak ditemukan.\n"
-            f"Jalankan: sudo modprobe v4l2loopback devices=1 video_nr={VIRTUAL_CAM_NR} "
+            f"[ERROR] Virtual camera (v4l2loopback) device was not found.\n"
+            f"Run: sudo modprobe v4l2loopback devices=1 video_nr={VIRTUAL_CAM_NR} "
             f"card_label=\"{VIRTUAL_CAM_LABEL}\" exclusive_caps=1",
             file=sys.stderr,
         )
@@ -68,7 +68,7 @@ def run_headless(args: argparse.Namespace) -> int:
 
     pipeline = CameraPipeline(on_error=lambda err: print(f"[ERROR] {err}", file=sys.stderr))
     pipeline.start(cfg)
-    print(f"{APP_NAME} headless aktif: {source} -> {vcam} [effect={cfg.effect_id}] (Ctrl+C untuk berhenti)")
+    print(f"{APP_NAME} headless active: {source} -> {vcam} [effect={cfg.effect_id}] (Press Ctrl+C to stop)")
     try:
         while running:
             time.sleep(0.25)
