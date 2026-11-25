@@ -12,40 +12,37 @@ all: distribute
 
 clean:
 	@echo "Cleaning up old builds..."
-	rm -rf dist-deb $(OUTPUT_DIR)
+	@rm -rf dist-deb $(OUTPUT_DIR)
 
 icons:
 	@echo "Generating application icons..."
-	python3 scripts/generate_icon.py
+	@python3 scripts/generate_icon.py >/dev/null
 
 test:
 	@echo "Running CamFX test suite..."
-	PYTHONPATH=. python3 -m unittest discover -s tests -v
+	@PYTHONPATH=. python3 -m unittest discover -s tests -v
 
 package: clean icons
 	@echo "Staging Debian package $(DEB_FILE)..."
-	mkdir -p $(STAGE_DIR)/DEBIAN
-	mkdir -p $(STAGE_DIR)/usr/lib/$(APP_NAME)
-	mkdir -p $(STAGE_DIR)/usr/bin
-	mkdir -p $(STAGE_DIR)/usr/share/applications
-	mkdir -p $(STAGE_DIR)/etc/modules-load.d
-	mkdir -p $(STAGE_DIR)/etc/modprobe.d
-	mkdir -p $(OUTPUT_DIR)
+	@mkdir -p $(STAGE_DIR)/DEBIAN \
+		$(STAGE_DIR)/usr/lib/$(APP_NAME) \
+		$(STAGE_DIR)/usr/bin \
+		$(STAGE_DIR)/usr/share/applications \
+		$(STAGE_DIR)/etc/modules-load.d \
+		$(STAGE_DIR)/etc/modprobe.d \
+		$(OUTPUT_DIR)
 
-	# Copy Python package
-	cp -r camfx $(STAGE_DIR)/usr/lib/$(APP_NAME)/
-	find $(STAGE_DIR)/usr/lib/$(APP_NAME) -name "__pycache__" -exec rm -rf {} +
+	@cp -r camfx $(STAGE_DIR)/usr/lib/$(APP_NAME)/
+	@find $(STAGE_DIR)/usr/lib/$(APP_NAME) -name "__pycache__" -exec rm -rf {} +
 
-	# Install multi-resolution icons
-	for s in 16 32 48 64 128 256; do \
+	@for s in 16 32 48 64 128 256; do \
 		mkdir -p $(STAGE_DIR)/usr/share/icons/hicolor/$${s}x$${s}/apps; \
 		cp assets/logo/logo-$${s}.png $(STAGE_DIR)/usr/share/icons/hicolor/$${s}x$${s}/apps/$(APP_NAME).png; \
 	done
-	mkdir -p $(STAGE_DIR)/usr/share/icons/hicolor/512x512/apps
-	cp assets/logo/logo.png $(STAGE_DIR)/usr/share/icons/hicolor/512x512/apps/$(APP_NAME).png
+	@mkdir -p $(STAGE_DIR)/usr/share/icons/hicolor/512x512/apps
+	@cp assets/logo/logo.png $(STAGE_DIR)/usr/share/icons/hicolor/512x512/apps/$(APP_NAME).png
 
-	# Create CLI wrapper (mirrors Commanda launcher style)
-	printf '%s\n' \
+	@printf '%s\n' \
 		'#!/bin/bash' \
 		'LOG_DIR="$${XDG_STATE_HOME:-$$HOME/.local/state}/camfx"' \
 		'mkdir -p "$$LOG_DIR" && chmod 700 "$$LOG_DIR"' \
@@ -71,10 +68,9 @@ package: clean icons
 		'touch "$$LOG_DIR/camfx.log" && chmod 600 "$$LOG_DIR/camfx.log"' \
 		'nohup python3 -m camfx.cli "$$@" </dev/null >>"$$LOG_DIR/camfx.log" 2>&1 &' \
 		> $(STAGE_DIR)/usr/bin/$(APP_NAME)
-	chmod 755 $(STAGE_DIR)/usr/bin/$(APP_NAME)
+	@chmod 755 $(STAGE_DIR)/usr/bin/$(APP_NAME)
 
-	# Desktop entry
-	printf '%s\n' \
+	@printf '%s\n' \
 		'[Desktop Entry]' \
 		'Name=CamFX' \
 		'GenericName=Custom Effect Virtual Camera' \
@@ -86,14 +82,12 @@ package: clean icons
 		'Categories=AudioVideo;Video;' \
 		'StartupWMClass=dev.camfx.CamFX' \
 		> $(STAGE_DIR)/usr/share/applications/$(APP_NAME).desktop
-	chmod 644 $(STAGE_DIR)/usr/share/applications/$(APP_NAME).desktop
+	@chmod 644 $(STAGE_DIR)/usr/share/applications/$(APP_NAME).desktop
 
-	# Kernel v4l2loopback persistent configuration
-	echo "v4l2loopback" > $(STAGE_DIR)/etc/modules-load.d/$(APP_NAME).conf
-	echo 'options v4l2loopback devices=1 video_nr=10 card_label="CamFX Virtual Camera" exclusive_caps=1' > $(STAGE_DIR)/etc/modprobe.d/$(APP_NAME).conf
+	@echo "v4l2loopback" > $(STAGE_DIR)/etc/modules-load.d/$(APP_NAME).conf
+	@echo 'options v4l2loopback devices=1 video_nr=10 card_label="CamFX Virtual Camera" exclusive_caps=1' > $(STAGE_DIR)/etc/modprobe.d/$(APP_NAME).conf
 
-	# DEBIAN/control
-	printf '%s\n' \
+	@printf '%s\n' \
 		'Package: $(APP_NAME)' \
 		'Version: $(VERSION)' \
 		'Section: video' \
@@ -106,8 +100,7 @@ package: clean icons
 		' with v4l2loopback virtual camera output for Zoom, Meet, Chrome, and OBS.' \
 		> $(STAGE_DIR)/DEBIAN/control
 
-	# DEBIAN/postinst
-	printf '%s\n' \
+	@printf '%s\n' \
 		'#!/bin/bash' \
 		'set -e' \
 		'if ! lsmod | grep -q "^v4l2loopback"; then' \
@@ -120,10 +113,9 @@ package: clean icons
 		'  gtk-update-icon-cache -f -t /usr/share/icons/hicolor >/dev/null 2>&1 || true' \
 		'fi' \
 		> $(STAGE_DIR)/DEBIAN/postinst
-	chmod 755 $(STAGE_DIR)/DEBIAN/postinst
+	@chmod 755 $(STAGE_DIR)/DEBIAN/postinst
 
-	# DEBIAN/postrm
-	printf '%s\n' \
+	@printf '%s\n' \
 		'#!/bin/bash' \
 		'set -e' \
 		'if command -v update-desktop-database >/dev/null 2>&1; then' \
@@ -133,13 +125,13 @@ package: clean icons
 		'  gtk-update-icon-cache -f -t /usr/share/icons/hicolor >/dev/null 2>&1 || true' \
 		'fi' \
 		> $(STAGE_DIR)/DEBIAN/postrm
-	chmod 755 $(STAGE_DIR)/DEBIAN/postrm
+	@chmod 755 $(STAGE_DIR)/DEBIAN/postrm
 
-	dpkg-deb --build --root-owner-group $(STAGE_DIR) $(DEB_FILE)
-	@ls -lh $(DEB_FILE)
+	@dpkg-deb --build --root-owner-group $(STAGE_DIR) $(DEB_FILE) >/dev/null
+	@echo "Built $(DEB_FILE) ($$(du -h $(DEB_FILE) | cut -f1))"
 
 distribute: package
 	@echo "Package generated at $(DEB_FILE)"
 
 install: package
-	sudo apt install -y --reinstall ./$(DEB_FILE)
+	@sudo apt install -y --reinstall ./$(DEB_FILE)

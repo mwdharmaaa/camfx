@@ -20,6 +20,19 @@ log_warn() { echo -e "${COLOR_YELLOW}[WARN]${COLOR_RESET} $1"; }
 log_success() { echo -e "${COLOR_BOLD}${COLOR_GREEN}[SUCCESS]${COLOR_RESET} $1"; }
 log_error() { echo -e "${COLOR_BOLD}${COLOR_RED}[ERROR]${COLOR_RESET} $1" >&2; }
 
+run_quiet() {
+    local log_file
+    log_file="$(mktemp)"
+    if "$@" >"$log_file" 2>&1; then
+        rm -f "$log_file"
+    else
+        local rc=$?
+        cat "$log_file" >&2
+        rm -f "$log_file"
+        return "$rc"
+    fi
+}
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
@@ -39,10 +52,11 @@ APP_VERSION="$(python3 -c "import camfx; print(camfx.__version__)")"
 log_info "Application : camfx (v${APP_VERSION})"
 
 log_step "Running automated pipeline and effect test suite..."
-bash test.sh
+run_quiet bash test.sh
+log_info "All tests passed."
 
 log_step "Building Debian (.deb) package..."
-make package
+run_quiet make package
 
 DEB_FILE="$(find output/deb -name "camfx_${APP_VERSION}_amd64.deb" 2>/dev/null | head -n 1)"
 if [ -z "$DEB_FILE" ] || [ ! -f "$DEB_FILE" ]; then
@@ -64,11 +78,11 @@ fi
 
 if dpkg -s camfx >/dev/null 2>&1; then
     log_warn "Purging previous installation of camfx..."
-    sudo apt-get purge -y camfx || sudo dpkg -P camfx
+    run_quiet sudo apt-get purge -y camfx || run_quiet sudo dpkg -P camfx
 fi
 
 log_step "Installing $(basename "$DEB_FILE")..."
-sudo apt-get install -y --reinstall --allow-downgrades "./$DEB_FILE"
+run_quiet sudo apt-get install -y --reinstall --allow-downgrades "./$DEB_FILE"
 
 log_step "Verifying v4l2loopback virtual camera module..."
 if ! lsmod | grep -q "^v4l2loopback"; then
