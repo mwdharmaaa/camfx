@@ -93,6 +93,11 @@ class TestCamFXEffects(unittest.TestCase):
         render_hud_overlay(annotated, effect_id="cyberpunk", hud_enabled=True, watermark_text="LIVE", now_monotonic=0.0)
         self.assertNotEqual(annotated.tobytes(), base.tobytes())
 
+        wm_only = Image.new("RGBA", (320, 240), (200, 180, 50, 255))
+        render_hud_overlay(wm_only, effect_id="normal", hud_enabled=False, watermark_text="CamFX")
+        # Surrounding padding pixel above watermark must remain original background without dark box fill.
+        self.assertEqual(wm_only.getpixel((20, 202)), (200, 180, 50, 255))
+
     def test_pipeline_string_builder_variants(self) -> None:
         pipeline = CameraPipeline()
         shader_str = pipeline.build_pipeline_string(PipelineConfig(source="videotest", effect_id="cyberpunk", mirror=False))

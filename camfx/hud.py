@@ -54,10 +54,8 @@ def render_hud_overlay(
         draw.text((bx + 8, pad_px + 15), badge_text, fill=cyan, font=font)
 
     if watermark:
-        bbox = draw.textbbox((0, 0), watermark, font=font)
-        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        wx, wy = 26, h - 38
-        draw.rounded_rectangle([wx - 8, wy - 6, wx + tw + 8, wy + th + 6], radius=6, fill=(12, 16, 24, 175))
-        draw.text((wx, wy), watermark, fill=(255, 255, 255, 235), font=font)
+        wx, wy = 24, h - 34
+        draw.text((wx + 1, wy + 1), watermark, fill=(0, 0, 0, 140), font=font)
+        draw.text((wx, wy), watermark, fill=(255, 255, 255, 230), font=font)
 
     return image
