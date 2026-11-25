@@ -12,7 +12,7 @@ Real-time custom virtual camera studio for Linux featuring OpenGL GLSL shaders, 
   * **Art & Vision**: Night Vision, Thermal Heat, X-Ray Negative, Neon Edge, Sketch Outline
   * **Lens & Fun**: Fisheye Lens, Bulge Zoom, Twirl Vortex, Light Tunnel, Mirror Split, Warp Wave, Vertigo Echo
 * **Live Controls & Overlay**: Horizontal Mirror, live Brightness / Contrast / Saturation adjustments, **Studio REC HUD** (viewfinder brackets, live clock, active effect badge), and **Custom Watermark Text**.
-* **Snapshot Capture**: Save processed RGBA frames as PNG snapshots into `~/Pictures/CamFX/`.
+* **Photo & Video Capture**: **Take Photo** saves PNG snapshots to `~/Pictures/CamFX/`, and **Record Video** captures MP4/WebM recordings to `~/Videos/CamFX/` (including live effect switches).
 * **Virtual Camera (`v4l2loopback`)**: Streams processed video to `/dev/video10` (`CamFX Virtual Camera`) for Chrome, Google Meet, Zoom, Discord, and OBS.
 * **Headless CLI Mode**: Run the virtual camera pipeline directly from a terminal or background service without opening the GTK4 GUI.
 

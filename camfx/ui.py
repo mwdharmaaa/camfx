@@ -14,11 +14,12 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from camfx import APP_ID, APP_NAME, VIRTUAL_CAM_LABEL, VIRTUAL_CAM_NR
 from camfx.pipeline import CameraPipeline, PipelineConfig, VideoDevice, discover_video_devices
+from camfx.ui_capture_bar import build_capture_bar
 from camfx.ui_sidebar import SidebarCallbacks, build_sidebar
 
 
 class CamFXWindow(Adw.ApplicationWindow):
-    """Main studio window displaying live preview, effect presets, and virtual camera controls."""
+    """Main studio window displaying live preview, capture controls, and effect presets."""
 
     def __init__(self, app: Adw.Application, initial_effect: str = "normal") -> None:
         super().__init__(application=app, title=f"{APP_NAME} - Custom Effect Camera")
@@ -33,6 +34,7 @@ class CamFXWindow(Adw.ApplicationWindow):
         self._frame_lock = threading.Lock()
         self._pending_frame = None
         self._frame_scheduled = False
+        self._record_timer_id: Optional[int] = None
 
         self._pipeline = CameraPipeline(on_frame=self._on_pipeline_frame, on_error=self._on_pipeline_error)
         self._build_ui()
@@ -56,12 +58,6 @@ class CamFXWindow(Adw.ApplicationWindow):
         refresh_btn.set_tooltip_text("Rescan physical cameras and v4l2loopback devices")
         refresh_btn.connect("clicked", lambda *_: self._refresh_devices(start_pipeline=True))
         header.pack_start(refresh_btn)
-
-        snap_btn = Gtk.Button(label="Snapshot")
-        snap_btn.set_icon_name("camera-photo-symbolic")
-        snap_btn.set_tooltip_text("Save snapshot to ~/Pictures/CamFX")
-        snap_btn.connect("clicked", self._on_snapshot_clicked)
-        header.pack_end(snap_btn)
 
         vcam_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         vcam_box.set_valign(Gtk.Align.CENTER)
@@ -90,6 +86,14 @@ class CamFXWindow(Adw.ApplicationWindow):
         self._picture.set_can_shrink(True)
         frame.set_child(self._picture)
         preview_col.append(frame)
+
+        capture_bar = build_capture_bar(
+            on_take_photo=self._on_take_photo_clicked,
+            on_toggle_record=self._on_record_clicked,
+        )
+        self._record_btn = capture_bar.record_button
+        self._record_label = capture_bar.record_label
+        preview_col.append(capture_bar.widget)
 
         status_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         self._status_label = Gtk.Label(label="Starting camera...", xalign=0.0, hexpand=True)
@@ -191,9 +195,38 @@ class CamFXWindow(Adw.ApplicationWindow):
             saturation=self._saturation_scale.get_value(),
         )
 
-    def _on_snapshot_clicked(self, _btn: Gtk.Button) -> None:
+    def _on_take_photo_clicked(self, _btn: Gtk.Button) -> None:
         saved = self._pipeline.save_snapshot()
-        self._status_label.set_text(f"Snapshot saved: {saved}" if saved else "No camera frame available yet.")
+        self._status_label.set_text(f"Photo saved: {saved}" if saved else "No camera frame available yet.")
+
+    def _on_record_clicked(self, _btn: Gtk.Button) -> None:
+        if not self._pipeline.is_recording:
+            try:
+                target = self._pipeline.start_recording()
+                self._record_btn.add_css_class("destructive-action")
+                self._record_label.set_text("Stop Recording (00:00)")
+                self._status_label.set_text(f"Recording video to {target}...")
+                self._record_timer_id = GLib.timeout_add(500, self._update_record_timer)
+            except Exception as exc:
+                self._status_label.set_text(f"Recording error: {exc}")
+            return
+
+        if self._record_timer_id is not None:
+            GLib.source_remove(self._record_timer_id)
+            self._record_timer_id = None
+        saved = self._pipeline.stop_recording()
+        self._record_btn.remove_css_class("destructive-action")
+        self._record_label.set_text("Record Video")
+        self._status_label.set_text(f"Video saved: {saved}" if saved else "Recording stopped (no frames captured).")
+
+    def _update_record_timer(self) -> bool:
+        if not self._pipeline.is_recording:
+            self._record_timer_id = None
+            return False
+        secs = int(self._pipeline.recording_elapsed)
+        mins, rem = divmod(secs, 60)
+        self._record_label.set_text(f"Stop Recording ({mins:02d}:{rem:02d})")
+        return True
 
     def _on_pipeline_frame(self, width: int, height: int, data: bytes, stride: int) -> None:
         with self._frame_lock:
@@ -218,6 +251,9 @@ class CamFXWindow(Adw.ApplicationWindow):
         GLib.idle_add(self._status_label.set_text, f"Pipeline Error: {message}")
 
     def _on_close_request(self, _win) -> bool:
+        if self._record_timer_id is not None:
+            GLib.source_remove(self._record_timer_id)
+            self._record_timer_id = None
         self._pipeline.stop()
         return False
 
