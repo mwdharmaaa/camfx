@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 
 import gi
@@ -82,6 +83,39 @@ class TestCamFXEffects(unittest.TestCase):
                 self.assertGreater(os.path.getsize(snap), 1000)
         finally:
             pipeline.stop()
+
+    def test_video_recording_across_effect_switch(self) -> None:
+        frame_count = 0
+        got_enough = threading.Event()
+
+        def on_frame(*_args) -> None:
+            nonlocal frame_count
+            frame_count += 1
+            if frame_count >= 12:
+                got_enough.set()
+
+        pipeline = CameraPipeline(on_frame=on_frame)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_target = pipeline.start_recording(output_dir=tmpdir)
+            self.assertTrue(pipeline.is_recording)
+            pipeline.start(PipelineConfig(source="videotest", effect_id="normal"))
+            try:
+                self.assertTrue(got_enough.wait(timeout=4.0), "Not enough frames received for recording")
+                # Switch effect mid-recording; recording must continue seamlessly.
+                frame_count = 0
+                got_enough.clear()
+                pipeline.start(PipelineConfig(source="videotest", effect_id="cyberpunk"))
+                self.assertTrue(pipeline.is_recording)
+                self.assertTrue(got_enough.wait(timeout=4.0), "Not enough post-switch frames received")
+                time.sleep(0.1)
+                saved = pipeline.stop_recording()
+                self.assertEqual(saved, out_target)
+                self.assertFalse(pipeline.is_recording)
+                self.assertIsNotNone(saved)
+                self.assertTrue(os.path.exists(saved))
+                self.assertGreater(os.path.getsize(saved), 2048)
+            finally:
+                pipeline.stop()
 
     def test_hud_overlay_mutates_only_when_enabled(self) -> None:
         base = Image.new("RGBA", (320, 240), (0, 0, 0, 255))
