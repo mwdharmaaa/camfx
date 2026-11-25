@@ -1,26 +1,37 @@
 # CamFX
 
-Aplikasi kamera virtual dengan efek khusus real-time (GLSL OpenGL shaders, EffecTV, Studio REC HUD, color grading, dan virtual camera `v4l2loopback`) untuk Linux, dikemas dalam paket `.deb` dengan pola instalasi seperti **Commanda**.
+Real-time custom virtual camera studio for Linux featuring OpenGL GLSL shaders, EffecTV filters, Studio REC HUD overlay, live color grading, and `v4l2loopback` virtual webcam output. Packaged into a `.deb` archive following the Commanda installation pipeline.
 
-## Fitur Utama
-- **24 Efek Real-Time** dalam 4 kategori:
-  - **Color & Cinema:** Normal, Cinema Warm, Cyberpunk Neon, Noir Sin City, Vintage Sepia, Cross Process, Soft Glow, Soft Blur
-  - **Retro & Stylize:** Glitch RGB, Retro CRT, Pixel 8-Bit, Old Film 1920s
-  - **Art & Vision:** Night Vision, Thermal Heat, X-Ray Negative, Neon Edge, Sketch Outline
-  - **Lens & Fun:** Fisheye Lens, Bulge Zoom, Twirl Vortex, Light Tunnel, Mirror Split, Warp Wave, Vertigo Echo
-- **Controls & Overlay Live:** Mirror Horizontal, Brightness / Contrast / Saturation, **Studio REC HUD** (viewfinder + jam + badge efek aktif), dan **Custom Watermark Text**.
-- **Snapshot:** Simpan hasil kamera ber-efek ke `~/Pictures/CamFX/`.
-- **Virtual Camera (`v4l2loopback`):** Mengirim output ke `/dev/video10` (`CamFX Virtual Camera`) agar terbaca oleh Chrome, Google Meet, Zoom, Discord, dan OBS.
-- **Mode Headless CLI:** Jalankan kamera virtual di terminal/background tanpa membuka GUI.
+---
 
-## Cara Pasang (Seperti Commanda)
+## 1. Key Features
+
+* **24 Real-Time Effects across 4 Categories**:
+  * **Color & Cinema**: Normal, Cinema Warm, Cyberpunk Neon, Noir Sin City, Vintage Sepia, Cross Process, Soft Glow, Soft Blur
+  * **Retro & Stylize**: Glitch RGB, Retro CRT, Pixel 8-Bit, Old Film 1920s
+  * **Art & Vision**: Night Vision, Thermal Heat, X-Ray Negative, Neon Edge, Sketch Outline
+  * **Lens & Fun**: Fisheye Lens, Bulge Zoom, Twirl Vortex, Light Tunnel, Mirror Split, Warp Wave, Vertigo Echo
+* **Live Controls & Overlay**: Horizontal Mirror, live Brightness / Contrast / Saturation adjustments, **Studio REC HUD** (viewfinder brackets, live clock, active effect badge), and **Custom Watermark Text**.
+* **Snapshot Capture**: Save processed RGBA frames as PNG snapshots into `~/Pictures/CamFX/`.
+* **Virtual Camera (`v4l2loopback`)**: Streams processed video to `/dev/video10` (`CamFX Virtual Camera`) for Chrome, Google Meet, Zoom, Discord, and OBS.
+* **Headless CLI Mode**: Run the virtual camera pipeline directly from a terminal or background service without opening the GTK4 GUI.
+
+---
+
+## 2. Installation (Commanda Pipeline Style)
+
+Build, test, package into `.deb`, install system-wide, and configure persistent `v4l2loopback` kernel options:
+
 ```bash
 ./install.sh
 ```
 
-## Cara Menjalankan
-- Dari menu aplikasi: cari **CamFX**
-- Dari terminal:
+---
+
+## 3. Usage
+
+* **Desktop Launcher**: Open **CamFX** from your application menu.
+* **Terminal CLI**:
   ```bash
   camfx
   camfx --headless --effect cyberpunk --hud --watermark "Live"
@@ -28,7 +39,16 @@ Aplikasi kamera virtual dengan efek khusus real-time (GLSL OpenGL shaders, Effec
   camfx --list-devices
   camfx --version
   ```
-- Atau jalankan langsung tanpa install sistem:
+* **Run Directly Without Installing**:
   ```bash
   ./runapp.sh
   ```
+
+---
+
+## 4. Testing & Packaging
+
+```bash
+./test.sh
+make package
+```

@@ -39,7 +39,7 @@ APP_VERSION="$(python3 -c "import camfx; print(camfx.__version__)")"
 log_info "Application : camfx (v${APP_VERSION})"
 
 log_step "Running automated pipeline and effect test suite..."
-PYTHONPATH=. python3 -m unittest discover -s tests -v
+bash test.sh
 
 log_step "Building Debian (.deb) package..."
 make package
@@ -54,16 +54,21 @@ log_info "Debian package created: $DEB_FILE ($(du -h "$DEB_FILE" | cut -f1))"
 
 log_step "Acquiring sudo privileges for system installation..."
 if [ "$EUID" -ne 0 ]; then
-    sudo -v
+    if [ -n "${SUDO_PASS:-}" ]; then
+        echo "$SUDO_PASS" | sudo -S -v 2>/dev/null || sudo -v
+        unset SUDO_PASS 2>/dev/null || true
+    else
+        sudo -v
+    fi
 fi
 
 if dpkg -s camfx >/dev/null 2>&1; then
     log_warn "Purging previous installation of camfx..."
-    sudo apt purge -y camfx || sudo dpkg -P camfx
+    sudo apt-get purge -y camfx || sudo dpkg -P camfx
 fi
 
 log_step "Installing $(basename "$DEB_FILE")..."
-sudo apt install -y --reinstall "./$DEB_FILE"
+sudo apt-get install -y --reinstall --allow-downgrades "./$DEB_FILE"
 
 log_step "Verifying v4l2loopback virtual camera module..."
 if ! lsmod | grep -q "^v4l2loopback"; then
@@ -73,14 +78,14 @@ fi
 if [ -e /dev/video10 ]; then
     log_info "Virtual Camera Ready: /dev/video10 ($(cat /sys/class/video4linux/video10/name 2>/dev/null || echo 'CamFX Virtual Camera'))"
 else
-    log_warn "/dev/video10 not detected yet. Check 'sudo modprobe v4l2loopback devices=1 video_nr=10 card_label=\"CamFX Virtual Camera\" exclusive_caps=1'."
+    log_warn "/dev/video10 not detected yet. Run 'sudo modprobe v4l2loopback devices=1 video_nr=10 card_label=\"CamFX Virtual Camera\" exclusive_caps=1'."
 fi
 
 echo ""
 echo -e "${COLOR_BOLD}==============================================================================${COLOR_RESET}"
 log_success "CamFX v${APP_VERSION} installed! Launch with:"
-echo -e "  ${COLOR_CYAN}camfx${COLOR_RESET}                              (Buka CamFX Studio GUI)"
-echo -e "  ${COLOR_CYAN}camfx --headless --effect cyberpunk${COLOR_RESET} (Jalan di terminal/background)"
-echo -e "  ${COLOR_CYAN}camfx --list-effects${COLOR_RESET}               (Lihat semua efek)"
-echo -e "  ${COLOR_CYAN}camfx --list-devices${COLOR_RESET}               (Cek kamera & virtual camera)"
+echo -e "  ${COLOR_CYAN}camfx${COLOR_RESET}                               (Launch CamFX Studio GUI)"
+echo -e "  ${COLOR_CYAN}camfx --headless --effect cyberpunk${COLOR_RESET} (Run headless virtual camera)"
+echo -e "  ${COLOR_CYAN}camfx --list-effects${COLOR_RESET}                (List all real-time effects)"
+echo -e "  ${COLOR_CYAN}camfx --list-devices${COLOR_RESET}                (List physical & virtual cameras)"
 echo -e "${COLOR_BOLD}==============================================================================${COLOR_RESET}"
