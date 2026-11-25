@@ -1,5 +1,6 @@
 """Automated unit and GStreamer pipeline tests for CamFX."""
 
+import hashlib
 import os
 import subprocess
 import sys
@@ -17,6 +18,7 @@ from camfx.cli import build_parser
 from camfx.effects import EFFECTS, get_effect, list_categories
 from camfx.hud import render_hud_overlay
 from camfx.pipeline import CameraPipeline, PipelineConfig, discover_video_devices
+from camfx.shader_glitch import SHADER_GLITCH
 
 
 class TestCamFXEffects(unittest.TestCase):
@@ -28,6 +30,12 @@ class TestCamFXEffects(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)))
         self.assertIn("Color & Cinema", list_categories())
         self.assertEqual(get_effect("nonexistent").id, "normal")
+
+    def test_glitch_shader_locked_integrity(self) -> None:
+        locked_sha256 = "7a13ca876338e401abe484cf177355e456072e0b20cc8f6f662839a8ed8764c4"
+        digest = hashlib.sha256(SHADER_GLITCH.encode("utf-8")).hexdigest()
+        self.assertEqual(digest, locked_sha256)
+        self.assertEqual(get_effect("glitch").fragment, SHADER_GLITCH)
 
     def test_all_effects_render_frames_with_hud(self) -> None:
         """Every single defined effect must initialize, apply HUD, and emit RGBA frames."""
