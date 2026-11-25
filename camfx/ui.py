@@ -243,7 +243,7 @@ class CamFXWindow(Adw.ApplicationWindow):
             self._frame_scheduled = False
         if frame is not None:
             width, height, data, stride = frame
-            texture = Gdk.MemoryTexture.new(width, height, Gdk.MemoryFormat.R8G8B8A8, GLib.Bytes.new(data), stride)
+            texture = Gdk.MemoryTexture.new(width, height, Gdk.MemoryFormat.R8G8B8X8, GLib.Bytes.new(data), stride)
             self._picture.set_paintable(texture)
         return False
 

@@ -69,7 +69,7 @@ def build_sidebar(config: PipelineConfig, callbacks: SidebarCallbacks) -> Sideba
     sidebar.set_margin_end(4)
     scroll.set_child(sidebar)
 
-    adj_group = Adw.PreferencesGroup(title="Adjustments & Overlay")
+    adj_group = Adw.PreferencesGroup(title="Adjustments and Overlay")
     sidebar.append(adj_group)
 
     mirror_row = Adw.SwitchRow(title="Mirror Horizontal", subtitle="Flip left and right like a mirror")

@@ -15,9 +15,11 @@ from PIL import Image
 gi.require_version("Gst", "1.0")
 
 from camfx.cli import build_parser
+from camfx.devices import device_supports_mjpeg_640x480
 from camfx.effects import EFFECTS, get_effect, list_categories
 from camfx.hud import render_hud_overlay
 from camfx.pipeline import CameraPipeline, PipelineConfig, discover_video_devices
+from camfx.pipeline_builder import build_pipeline_string
 from camfx.shader_glitch import SHADER_GLITCH
 
 
@@ -149,6 +151,13 @@ class TestCamFXEffects(unittest.TestCase):
         effectv_str = pipeline.build_pipeline_string(PipelineConfig(source="videotest", effect_id="warp", mirror=True))
         self.assertIn("warptv", effectv_str)
         self.assertIn("method=horizontal-flip", effectv_str)
+
+        if os.path.exists("/dev/video0"):
+            mjpeg_str = build_pipeline_string(PipelineConfig(source="/dev/video0", effect_id="sepia"), use_mjpeg=True)
+            self.assertIn("image/jpeg,width=640,height=480", mjpeg_str)
+            self.assertIn("jpegdec", mjpeg_str)
+            self.assertIn("leaky=downstream", mjpeg_str)
+            self.assertIsInstance(device_supports_mjpeg_640x480("/dev/video0"), bool)
 
     def test_device_discovery_and_ui_import(self) -> None:
         physical, virtual = discover_video_devices()

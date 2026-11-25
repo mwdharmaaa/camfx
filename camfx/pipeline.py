@@ -157,7 +157,7 @@ class CameraPipeline:
         target_dir = output_dir or os.path.join(os.path.expanduser("~"), "Pictures", "CamFX")
         os.makedirs(target_dir, exist_ok=True)
         out_path = os.path.join(target_dir, f"camfx_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
-        Image.frombytes("RGBA", (width, height), data, "raw", "RGBA", stride, 1).save(out_path, "PNG")
+        Image.frombytes("RGBA", (width, height), data, "raw", "RGBA", stride, 1).convert("RGB").save(out_path, "PNG")
         return out_path
 
     def _on_new_sample(self, sink: Gst.Element) -> Gst.FlowReturn:
@@ -172,7 +172,7 @@ class CameraPipeline:
             return Gst.FlowReturn.OK
         try:
             raw = bytes(map_info.data)
-            stride = width * 4
+            stride = len(raw) // height if (height > 0 and len(raw) % height == 0) else width * 4
             with self._lock:
                 self._latest_frame = (width, height, raw, stride)
             if self._recorder.is_recording:
