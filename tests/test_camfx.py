@@ -8,20 +8,22 @@ import threading
 import unittest
 
 import gi
+from PIL import Image
 
 gi.require_version("Gst", "1.0")
-from gi.repository import Gst
 
+from camfx.cli import build_parser
 from camfx.effects import EFFECTS, get_effect, list_categories
+from camfx.hud import render_hud_overlay
 from camfx.pipeline import CameraPipeline, PipelineConfig, discover_video_devices
 
 
 class TestCamFXEffects(unittest.TestCase):
-    """Verify effect catalog completeness and GStreamer execution for every effect."""
+    """Verify effect catalog completeness, HUD rendering, and GStreamer execution."""
 
     def test_catalog_non_empty_and_unique_ids(self) -> None:
         ids = [e.id for e in EFFECTS]
-        self.assertGreaterEqual(len(ids), 20)
+        self.assertGreaterEqual(len(ids), 24)
         self.assertEqual(len(ids), len(set(ids)))
         self.assertIn("Color & Cinema", list_categories())
         self.assertEqual(get_effect("nonexistent").id, "normal")
@@ -54,7 +56,7 @@ class TestCamFXEffects(unittest.TestCase):
                 finally:
                     pipeline.stop()
 
-    def test_live_adjustments_and_snapshot(self) -> None:
+    def test_live_adjustments_clamping_and_snapshot(self) -> None:
         got_frame = threading.Event()
         pipeline = CameraPipeline(on_frame=lambda *_: got_frame.set())
         cfg = PipelineConfig(source="videotest", effect_id="cyberpunk", hud_enabled=True)
@@ -62,13 +64,17 @@ class TestCamFXEffects(unittest.TestCase):
         try:
             self.assertTrue(got_frame.wait(timeout=3.0))
             pipeline.update_live_adjustments(
-                brightness=0.2,
-                contrast=1.3,
-                saturation=1.4,
+                brightness=5.0,
+                contrast=-1.0,
+                saturation=9.0,
                 mirror=False,
                 hud_enabled=False,
                 watermark_text="Studio",
             )
+            self.assertEqual(pipeline.config.brightness, 1.0)
+            self.assertEqual(pipeline.config.contrast, 0.0)
+            self.assertEqual(pipeline.config.saturation, 2.0)
+            self.assertFalse(pipeline.config.mirror)
             with tempfile.TemporaryDirectory() as tmpdir:
                 snap = pipeline.save_snapshot(output_dir=tmpdir)
                 self.assertIsNotNone(snap)
@@ -77,12 +83,41 @@ class TestCamFXEffects(unittest.TestCase):
         finally:
             pipeline.stop()
 
-    def test_device_discovery_returns_lists(self) -> None:
+    def test_hud_overlay_mutates_only_when_enabled(self) -> None:
+        base = Image.new("RGBA", (320, 240), (0, 0, 0, 255))
+        untouched = base.copy()
+        render_hud_overlay(untouched, effect_id="cyberpunk", hud_enabled=False, watermark_text="   ")
+        self.assertEqual(untouched.tobytes(), base.tobytes())
+
+        annotated = base.copy()
+        render_hud_overlay(annotated, effect_id="cyberpunk", hud_enabled=True, watermark_text="LIVE", now_monotonic=0.0)
+        self.assertNotEqual(annotated.tobytes(), base.tobytes())
+
+    def test_pipeline_string_builder_variants(self) -> None:
+        pipeline = CameraPipeline()
+        shader_str = pipeline.build_pipeline_string(PipelineConfig(source="videotest", effect_id="cyberpunk", mirror=False))
+        self.assertIn("glshader name=fx_shader", shader_str)
+        self.assertIn("method=none", shader_str)
+
+        effectv_str = pipeline.build_pipeline_string(PipelineConfig(source="videotest", effect_id="warp", mirror=True))
+        self.assertIn("warptv", effectv_str)
+        self.assertIn("method=horizontal-flip", effectv_str)
+
+    def test_device_discovery_and_ui_import(self) -> None:
         physical, virtual = discover_video_devices()
         self.assertIsInstance(physical, list)
         self.assertIsInstance(virtual, list)
+        import camfx.ui
 
-    def test_cli_flags(self) -> None:
+        self.assertTrue(hasattr(camfx.ui, "CamFXWindow"))
+
+    def test_cli_flags_and_parser(self) -> None:
+        args = build_parser().parse_args(["--headless", "--effect", "cyberpunk", "--hud", "--watermark", "Live"])
+        self.assertTrue(args.headless)
+        self.assertEqual(args.effect, "cyberpunk")
+        self.assertTrue(args.hud)
+        self.assertEqual(args.watermark, "Live")
+
         env = dict(os.environ)
         env["PYTHONPATH"] = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         res_ver = subprocess.run([sys.executable, "-m", "camfx.cli", "--version"], env=env, capture_output=True, text=True, check=True)
