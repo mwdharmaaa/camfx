@@ -187,6 +187,7 @@ class TestCamFXEffects(unittest.TestCase):
             raw_v4l2 = pipeline.build_pipeline_string(PipelineConfig(source="/dev/video0", effect_id="sepia", scanline_glitch=True))
             self.assertIn("v4l2src device=/dev/video0 ! videoconvert ! videoscale ! video/x-raw,width=640,height=480", raw_v4l2)
             self.assertNotIn("jpegdec", raw_v4l2)
+            self.assertNotIn("deinterlace", raw_v4l2)
 
             clean_mjpeg = build_pipeline_string(
                 PipelineConfig(source="/dev/video0", effect_id="sepia", scanline_glitch=False),
@@ -195,6 +196,7 @@ class TestCamFXEffects(unittest.TestCase):
             self.assertIn("image/jpeg,width=640,height=480", clean_mjpeg)
             self.assertIn("jpegdec", clean_mjpeg)
             self.assertIn("leaky=downstream", clean_mjpeg)
+            self.assertIn("deinterlace mode=interlaced fields=top method=linear", clean_mjpeg)
 
             clean_raw_queue = build_pipeline_string(
                 PipelineConfig(source="/dev/video0", effect_id="sepia", scanline_glitch=False),
@@ -202,7 +204,46 @@ class TestCamFXEffects(unittest.TestCase):
             )
             self.assertIn("queue max-size-buffers=2 leaky=downstream", clean_raw_queue)
             self.assertNotIn("jpegdec", clean_raw_queue)
+            self.assertIn("deinterlace mode=interlaced fields=top method=linear", clean_raw_queue)
             self.assertIsInstance(device_supports_mjpeg_640x480("/dev/video0"), bool)
+
+    def test_deinterlace_eliminates_horizontal_scanline_combing(self) -> None:
+        from gi.repository import Gst
+
+        Gst.init(None)
+        width, height = 64, 64
+        combed = bytearray(width * height * 3)
+        for y in range(height):
+            val = 255 if y % 2 == 0 else 0
+            row_start = y * width * 3
+            combed[row_start : row_start + width * 3] = bytes([val]) * (width * 3)
+
+        pipe = Gst.parse_launch(
+            "appsrc name=src caps=video/x-raw,format=RGB,width=64,height=64,framerate=30/1 "
+            "! videoconvert ! deinterlace mode=interlaced fields=top method=linear "
+            "! videoconvert ! video/x-raw,format=RGB ! appsink name=sink"
+        )
+        src = pipe.get_by_name("src")
+        sink = pipe.get_by_name("sink")
+        pipe.set_state(Gst.State.PLAYING)
+        try:
+            buf = Gst.Buffer.new_wrapped(bytes(combed))
+            src.emit("push-buffer", buf)
+            src.emit("end-of-stream")
+            sample = sink.emit("pull-sample")
+            self.assertIsNotNone(sample)
+            out_buf = sample.get_buffer()
+            ok, map_info = out_buf.map(Gst.MapFlags.READ)
+            self.assertTrue(ok)
+            try:
+                out_bytes = bytes(map_info.data)
+            finally:
+                out_buf.unmap(map_info)
+            # Every alternating black/white scanline row must be normalized cleanly to 255.
+            row_values = [out_bytes[y * width * 3] for y in range(4, height - 4)]
+            self.assertEqual(set(row_values), {255})
+        finally:
+            pipe.set_state(Gst.State.NULL)
 
     def test_device_discovery_and_ui_import(self) -> None:
         physical, virtual = discover_video_devices()

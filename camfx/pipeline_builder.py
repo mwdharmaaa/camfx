@@ -28,15 +28,21 @@ def build_pipeline_string(cfg: PipelineConfig, *, use_mjpeg: bool | None = None)
             if use_mjpeg is not None
             else (Gst.ElementFactory.find("jpegdec") is not None and device_supports_mjpeg_640x480(cfg.source))
         )
+        deint_stage = (
+            " ! videoconvert ! deinterlace mode=interlaced fields=top method=linear"
+            if Gst.ElementFactory.find("deinterlace") is not None
+            else ""
+        )
         if mjpeg_ok:
             src_stage = (
                 f"v4l2src device={cfg.source} ! image/jpeg,width=640,height=480 "
-                "! queue max-size-buffers=2 leaky=downstream ! jpegdec ! videoconvert ! video/x-raw,width=640,height=480"
+                f"! queue max-size-buffers=2 leaky=downstream ! jpegdec{deint_stage} "
+                "! videoconvert ! video/x-raw,width=640,height=480"
             )
         else:
             src_stage = (
-                f"v4l2src device={cfg.source} ! queue max-size-buffers=2 leaky=downstream "
-                "! videoconvert ! videoscale ! video/x-raw,width=640,height=480"
+                f"v4l2src device={cfg.source} ! queue max-size-buffers=2 leaky=downstream"
+                f"{deint_stage} ! videoconvert ! videoscale ! video/x-raw,width=640,height=480"
             )
 
     flip_method = "horizontal-flip" if cfg.mirror else "none"
