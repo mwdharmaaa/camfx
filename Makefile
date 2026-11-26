@@ -94,7 +94,7 @@ package: clean icons
 		'Priority: optional' \
 		'Architecture: amd64' \
 		'Maintainer: CamFX <camfx@local>' \
-		'Depends: python3, python3-gi, python3-pil, gir1.2-gtk-4.0, gir1.2-adw-1, gir1.2-gstreamer-1.0, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, gstreamer1.0-gl' \
+		'Depends: python3, python3-gi, python3-pil, gir1.2-gtk-4.0, gir1.2-adw-1, gir1.2-gstreamer-1.0, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, gstreamer1.0-gl, gstreamer1.0-gtk4' \
 		'Description: Custom Effect Virtual Camera for Linux' \
 		' Real-time camera effects studio (GLSL shaders, EffecTV, Studio HUD)' \
 		' with v4l2loopback virtual camera output for Zoom, Meet, Chrome, and OBS.' \

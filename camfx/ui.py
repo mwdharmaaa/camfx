@@ -26,7 +26,11 @@ class CamFXWindow(Adw.ApplicationWindow):
         self.set_default_size(1160, 740)
         self.set_size_request(860, 560)
 
-        self._config = PipelineConfig(effect_id=initial_effect, scanline_glitch=scanline_glitch)
+        self._config = PipelineConfig(
+            effect_id=initial_effect,
+            scanline_glitch=scanline_glitch,
+            use_gtk4_sink=True,
+        )
         self._cameras: List[VideoDevice] = []
         self._virtual_cams: List[VideoDevice] = []
         self._effect_buttons: Dict[str, Gtk.ToggleButton] = {}
@@ -147,6 +151,8 @@ class CamFXWindow(Adw.ApplicationWindow):
     def _restart_pipeline(self) -> None:
         try:
             self._pipeline.start(self._config)
+            if self._pipeline.preview_paintable is not None:
+                self._picture.set_paintable(self._pipeline.preview_paintable)
             glitch_state = "ON" if self._config.scanline_glitch else "OFF"
             self._status_label.set_text(
                 f"Active | Input: {self._config.source} | Effect: {self._config.effect_id} | Scanline Glitch: {glitch_state}"
@@ -239,6 +245,8 @@ class CamFXWindow(Adw.ApplicationWindow):
         return True
 
     def _on_pipeline_frame(self, width: int, height: int, data: bytes, stride: int) -> None:
+        if self._pipeline.preview_paintable is not None:
+            return
         with self._frame_lock:
             self._pending_frame = (width, height, data, stride)
             if self._frame_scheduled:

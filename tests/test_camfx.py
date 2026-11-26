@@ -206,6 +206,14 @@ class TestCamFXEffects(unittest.TestCase):
             self.assertIn("pipewiresrc target-object=pw_node_0 always-copy=true", clean_pw)
             self.assertIn("image/jpeg,width=1600,height=1200", clean_pw)
             self.assertIn("jpegdec", clean_pw)
+            self.assertLess(clean_pw.index("deinterlace"), clean_pw.index("videoscale"))
+
+            gtk_str = pipeline.build_pipeline_string(PipelineConfig(source="videotest", effect_id="sepia", use_gtk4_sink=True))
+            from gi.repository import Gst
+
+            if Gst.ElementFactory.find("gtk4paintablesink") is not None:
+                self.assertIn("gtk4paintablesink name=gtk_preview_sink", gtk_str)
+                self.assertIn("appsink name=preview_sink", gtk_str)
 
             clean_raw_queue = build_pipeline_string(
                 PipelineConfig(source="/dev/video0", effect_id="sepia", scanline_glitch=False),

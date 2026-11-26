@@ -111,7 +111,8 @@ def build_clean_capture_stage(
     else:
         stages.append("queue max-size-buffers=2 leaky=downstream")
 
-    stages.extend(["videoconvert", "videoscale method=bilinear", "video/x-raw,width=640,height=480"])
     if deint_ok:
+        # Deinterlace 1:1 sensor lines before downscaling so odd/even rows are not smeared together.
         stages.extend(["videoconvert", "deinterlace mode=interlaced fields=top method=linear"])
+    stages.extend(["videoconvert", "videoscale method=bilinear", "video/x-raw,width=640,height=480"])
     return " ! ".join(stages)

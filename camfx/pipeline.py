@@ -39,12 +39,17 @@ class CameraPipeline:
         self._flip: Optional[Gst.Element] = None
         self._lock = threading.Lock()
         self._latest_frame: Optional[Tuple[int, int, bytes, int]] = None
+        self._preview_paintable: Optional[object] = None
         self._running = False
         self._recorder = VideoRecorder()
 
     @property
     def is_running(self) -> bool:
         return self._running
+
+    @property
+    def preview_paintable(self) -> Optional[object]:
+        return self._preview_paintable
 
     @property
     def is_recording(self) -> bool:
@@ -80,6 +85,8 @@ class CameraPipeline:
 
         if (sink_el := pipeline.get_by_name("preview_sink")) is not None:
             sink_el.connect("new-sample", self._on_new_sample)
+        gtk_sink = pipeline.get_by_name("gtk_preview_sink")
+        self._preview_paintable = gtk_sink.get_property("paintable") if gtk_sink is not None else None
 
         bus = pipeline.get_bus()
         bus.add_signal_watch()
@@ -100,6 +107,7 @@ class CameraPipeline:
             self._pipeline = None
         self._balance = None
         self._flip = None
+        self._preview_paintable = None
         self._running = False
 
     def stop(self) -> None:

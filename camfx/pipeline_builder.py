@@ -66,6 +66,11 @@ def build_pipeline_string(
     pipeline_str = " ! ".join(stages)
 
     if cfg.enable_preview:
+        if cfg.use_gtk4_sink and Gst.ElementFactory.find("gtk4paintablesink") is not None:
+            pipeline_str += (
+                " t. ! queue leaky=downstream max-size-buffers=2 ! videoconvert "
+                "! gtk4paintablesink name=gtk_preview_sink sync=false"
+            )
         pipeline_str += (
             " t. ! queue leaky=downstream max-size-buffers=2 ! videoconvert ! video/x-raw,format=RGBA "
             "! appsink name=preview_sink emit-signals=true max-buffers=1 drop=true sync=false"

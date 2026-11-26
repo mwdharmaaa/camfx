@@ -38,6 +38,7 @@ class PipelineConfig:
     virtual_device: Optional[str] = None
     virtual_cam_enabled: bool = False
     enable_preview: bool = True
+    use_gtk4_sink: bool = False
 
 
 def _device_index_number(sys_path: str) -> int:
