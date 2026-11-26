@@ -54,7 +54,19 @@ def build_pipeline_string(cfg: PipelineConfig, *, use_mjpeg: bool | None = None)
         f"videobalance name=balance brightness={cfg.brightness:.3f} "
         f"contrast={cfg.contrast:.3f} saturation={cfg.saturation:.3f}"
     )
-    stages.extend(["videoconvert", balance, "videoconvert", "video/x-raw,format=RGBA", "identity name=hud_pad", "tee name=t"])
+    # Strip uninitialized/zeroed padding alpha (e.g. EffecTV RGBx, gleffects_sin) so GTK4/PNG render opaque.
+    stages.extend(
+        [
+            "videoconvert",
+            balance,
+            "videoconvert",
+            "video/x-raw,format=RGB",
+            "videoconvert",
+            "video/x-raw,format=RGBA",
+            "identity name=hud_pad",
+            "tee name=t",
+        ]
+    )
     pipeline_str = " ! ".join(stages)
 
     if cfg.enable_preview:

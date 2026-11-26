@@ -44,10 +44,15 @@ class TestCamFXEffects(unittest.TestCase):
         for spec in EFFECTS:
             with self.subTest(effect=spec.id):
                 got_frame = threading.Event()
+                frame_stats: dict[str, int] = {}
                 errors = []
 
                 def on_frame(w: int, h: int, data: bytes, stride: int) -> None:
                     if w == 640 and h == 480 and len(data) == stride * h:
+                        alphas = data[3::4]
+                        frame_stats["min_a"] = min(alphas)
+                        frame_stats["max_a"] = max(alphas)
+                        frame_stats["max_rgb"] = max(max(data[0::4]), max(data[1::4]), max(data[2::4]))
                         got_frame.set()
 
                 pipeline = CameraPipeline(on_frame=on_frame, on_error=errors.append)
@@ -64,6 +69,32 @@ class TestCamFXEffects(unittest.TestCase):
                 try:
                     self.assertTrue(got_frame.wait(timeout=3.0), f"Effect {spec.id} produced no frame; errors={errors}")
                     self.assertEqual(errors, [])
+                    self.assertEqual(frame_stats.get("max_a"), 255, f"Effect {spec.id} produced zero max alpha")
+                    self.assertGreaterEqual(frame_stats.get("min_a", 0), 140, f"Effect {spec.id} emitted transparent pixels")
+                    self.assertGreater(frame_stats.get("max_rgb", 0), 0, f"Effect {spec.id} emitted blank RGB frame")
+                finally:
+                    pipeline.stop()
+
+    def test_effectv_and_noir_emit_fully_opaque_frames(self) -> None:
+        """EffecTV (RGBx) and gleffects_sin must emit alpha=255 without HUD enabled."""
+        for effect_id in ("vertigo", "noir", "aging", "neon_edge", "warp"):
+            with self.subTest(effect=effect_id):
+                got_frame = threading.Event()
+                frame_stats: dict[str, int] = {}
+
+                def on_frame(w: int, h: int, data: bytes, stride: int) -> None:
+                    if w == 640 and h == 480 and len(data) == stride * h:
+                        alphas = data[3::4]
+                        frame_stats["min_a"] = min(alphas)
+                        frame_stats["max_rgb"] = max(max(data[0::4]), max(data[1::4]), max(data[2::4]))
+                        got_frame.set()
+
+                pipeline = CameraPipeline(on_frame=on_frame)
+                pipeline.start(PipelineConfig(source="videotest", effect_id=effect_id, hud_enabled=False))
+                try:
+                    self.assertTrue(got_frame.wait(timeout=3.0), f"Effect {effect_id} produced no frame")
+                    self.assertEqual(frame_stats.get("min_a"), 255, f"Effect {effect_id} leaked non-opaque alpha")
+                    self.assertGreater(frame_stats.get("max_rgb", 0), 0, f"Effect {effect_id} emitted blank frame")
                 finally:
                     pipeline.stop()
 
