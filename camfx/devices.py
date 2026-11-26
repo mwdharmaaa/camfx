@@ -58,6 +58,8 @@ def _read_sysfs_text(path: str, fallback: str) -> str:
 
 def device_supports_mjpeg_640x480(device_path: str) -> bool:
     """Return True when the V4L2 camera exposes image/jpeg at 640x480."""
+    if not Gst.is_initialized():
+        Gst.init(None)
     if not device_path or device_path == "videotest":
         return False
     target = Gst.Caps.from_string("image/jpeg,width=640,height=480")

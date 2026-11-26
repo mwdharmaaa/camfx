@@ -14,6 +14,7 @@ from PIL import Image
 
 gi.require_version("Gst", "1.0")
 
+from camfx.capture_clean import CleanSourceProfile, build_clean_capture_stage, probe_clean_source
 from camfx.cli import build_parser
 from camfx.devices import device_supports_mjpeg_640x480
 from camfx.effects import EFFECTS, get_effect, list_categories
@@ -186,25 +187,35 @@ class TestCamFXEffects(unittest.TestCase):
         if os.path.exists("/dev/video0"):
             raw_v4l2 = pipeline.build_pipeline_string(PipelineConfig(source="/dev/video0", effect_id="sepia", scanline_glitch=True))
             self.assertIn("v4l2src device=/dev/video0 ! videoconvert ! videoscale ! video/x-raw,width=640,height=480", raw_v4l2)
+            self.assertNotIn("pipewiresrc", raw_v4l2)
             self.assertNotIn("jpegdec", raw_v4l2)
             self.assertNotIn("deinterlace", raw_v4l2)
 
-            clean_mjpeg = build_pipeline_string(
-                PipelineConfig(source="/dev/video0", effect_id="sepia", scanline_glitch=False),
-                use_mjpeg=True,
+            clean_auto = build_pipeline_string(PipelineConfig(source="/dev/video0", effect_id="sepia", scanline_glitch=False))
+            self.assertIn("deinterlace mode=interlaced fields=top method=linear", clean_auto)
+            self.assertIn("videoscale method=bilinear", clean_auto)
+            self.assertIn("leaky=downstream", clean_auto)
+
+            clean_pw = build_clean_capture_stage(
+                "/dev/video0",
+                profile=CleanSourceProfile(pipewire_target="pw_node_0", mjpeg_size=(1600, 1200)),
+                has_pipewiresrc=True,
+                has_jpegdec=True,
+                has_deinterlace=True,
             )
-            self.assertIn("image/jpeg,width=640,height=480", clean_mjpeg)
-            self.assertIn("jpegdec", clean_mjpeg)
-            self.assertIn("leaky=downstream", clean_mjpeg)
-            self.assertIn("deinterlace mode=interlaced fields=top method=linear", clean_mjpeg)
+            self.assertIn("pipewiresrc target-object=pw_node_0 always-copy=true", clean_pw)
+            self.assertIn("image/jpeg,width=1600,height=1200", clean_pw)
+            self.assertIn("jpegdec", clean_pw)
 
             clean_raw_queue = build_pipeline_string(
                 PipelineConfig(source="/dev/video0", effect_id="sepia", scanline_glitch=False),
                 use_mjpeg=False,
             )
+            self.assertIn("v4l2src device=/dev/video0", clean_raw_queue)
             self.assertIn("queue max-size-buffers=2 leaky=downstream", clean_raw_queue)
             self.assertNotIn("jpegdec", clean_raw_queue)
             self.assertIn("deinterlace mode=interlaced fields=top method=linear", clean_raw_queue)
+            self.assertIsInstance(probe_clean_source("/dev/video0"), CleanSourceProfile)
             self.assertIsInstance(device_supports_mjpeg_640x480("/dev/video0"), bool)
 
     def test_deinterlace_eliminates_horizontal_scanline_combing(self) -> None:

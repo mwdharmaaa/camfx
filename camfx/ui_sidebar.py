@@ -86,7 +86,7 @@ def build_sidebar(config: PipelineConfig, callbacks: SidebarCallbacks) -> Sideba
 
     scanline_row = Adw.SwitchRow(
         title="Scanline Glitch",
-        subtitle="Raw YUY2 motion scanline tearing (off = clean MJPEG)",
+        subtitle="Raw YUY2 motion scanline tearing (off = clean PipeWire capture)",
     )
     scanline_row.set_active(config.scanline_glitch)
     scanline_row.connect("notify::active", callbacks.on_scanline_glitch_changed)

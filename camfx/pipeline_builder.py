@@ -10,40 +10,30 @@ gi.require_version("Gst", "1.0")
 from gi.repository import Gst
 from PIL import Image
 
-from camfx.devices import PipelineConfig, device_supports_mjpeg_640x480
+from camfx.capture_clean import CleanSourceProfile, build_clean_capture_stage
+from camfx.devices import PipelineConfig
 from camfx.effects import get_effect
 from camfx.hud import render_hud_overlay
 
 
-def build_pipeline_string(cfg: PipelineConfig, *, use_mjpeg: bool | None = None) -> str:
+def build_pipeline_string(
+    cfg: PipelineConfig,
+    *,
+    clean_profile: CleanSourceProfile | None = None,
+    use_mjpeg: bool | None = None,
+) -> str:
     """Build the GStreamer launch description string for a given PipelineConfig."""
     if cfg.source == "videotest" or not os.path.exists(cfg.source):
         src_stage = "videotestsrc is-live=true pattern=smpte ! video/x-raw,width=640,height=480,framerate=30/1"
     elif cfg.scanline_glitch:
-        # LOCKED: Preserve raw v4l2src capture pipeline when scanline glitch is ON.
+        # LOCKED: Preserve raw v4l2src capture pipeline when Scanline Glitch is ON.
         src_stage = f"v4l2src device={cfg.source} ! videoconvert ! videoscale ! video/x-raw,width=640,height=480"
     else:
-        mjpeg_ok = (
-            use_mjpeg
-            if use_mjpeg is not None
-            else (Gst.ElementFactory.find("jpegdec") is not None and device_supports_mjpeg_640x480(cfg.source))
-        )
-        deint_stage = (
-            " ! videoconvert ! deinterlace mode=interlaced fields=top method=linear"
-            if Gst.ElementFactory.find("deinterlace") is not None
-            else ""
-        )
-        if mjpeg_ok:
-            src_stage = (
-                f"v4l2src device={cfg.source} ! image/jpeg,width=640,height=480 "
-                f"! queue max-size-buffers=2 leaky=downstream ! jpegdec{deint_stage} "
-                "! videoconvert ! video/x-raw,width=640,height=480"
-            )
-        else:
-            src_stage = (
-                f"v4l2src device={cfg.source} ! queue max-size-buffers=2 leaky=downstream"
-                f"{deint_stage} ! videoconvert ! videoscale ! video/x-raw,width=640,height=480"
-            )
+        # Separate clean capture backend (PipeWire HD MJPEG + bilinear downscale + deinterlace).
+        override_profile = clean_profile
+        if override_profile is None and use_mjpeg is not None:
+            override_profile = CleanSourceProfile(mjpeg_size=(640, 480) if use_mjpeg else None)
+        src_stage = build_clean_capture_stage(cfg.source, profile=override_profile)
 
     flip_method = "horizontal-flip" if cfg.mirror else "none"
     stages = [src_stage, "videoconvert", f"videoflip name=flip method={flip_method}"]
