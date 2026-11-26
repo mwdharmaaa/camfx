@@ -7,6 +7,11 @@ import os
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
+import gi
+
+gi.require_version("Gst", "1.0")
+from gi.repository import Gst
+
 
 @dataclass(frozen=True)
 class VideoDevice:
@@ -24,6 +29,7 @@ class PipelineConfig:
     source: str = "/dev/video0"
     effect_id: str = "normal"
     mirror: bool = True
+    scanline_glitch: bool = True
     brightness: float = 0.0   # -1.0 .. 1.0
     contrast: float = 1.0     # 0.0 .. 2.0
     saturation: float = 1.0   # 0.0 .. 2.0
@@ -48,6 +54,29 @@ def _read_sysfs_text(path: str, fallback: str) -> str:
             return f.read().strip() or fallback
     except OSError:
         return fallback
+
+
+def device_supports_mjpeg_640x480(device_path: str) -> bool:
+    """Return True when the V4L2 camera exposes image/jpeg at 640x480."""
+    if not device_path or device_path == "videotest":
+        return False
+    target = Gst.Caps.from_string("image/jpeg,width=640,height=480")
+    monitor = Gst.DeviceMonitor()
+    monitor.add_filter("Video/Source", None)
+    if not monitor.start():
+        return False
+    try:
+        for dev in monitor.get_devices():
+            props = dev.get_properties()
+            v4l2_path = props.get_string("api.v4l2.path") if props else None
+            if v4l2_path != device_path:
+                continue
+            caps = dev.get_caps()
+            if caps is not None and caps.can_intersect(target):
+                return True
+    finally:
+        monitor.stop()
+    return False
 
 
 def discover_video_devices() -> Tuple[List[VideoDevice], List[VideoDevice]]:

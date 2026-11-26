@@ -10,18 +10,34 @@ gi.require_version("Gst", "1.0")
 from gi.repository import Gst
 from PIL import Image
 
-from camfx.devices import PipelineConfig
+from camfx.devices import PipelineConfig, device_supports_mjpeg_640x480
 from camfx.effects import get_effect
 from camfx.hud import render_hud_overlay
 
 
-def build_pipeline_string(cfg: PipelineConfig) -> str:
+def build_pipeline_string(cfg: PipelineConfig, *, use_mjpeg: bool | None = None) -> str:
     """Build the GStreamer launch description string for a given PipelineConfig."""
     if cfg.source == "videotest" or not os.path.exists(cfg.source):
         src_stage = "videotestsrc is-live=true pattern=smpte ! video/x-raw,width=640,height=480,framerate=30/1"
-    else:
-        # LOCKED: Preserve raw v4l2src capture pipeline without MJPEG/jpegdec unless explicitly instructed.
+    elif cfg.scanline_glitch:
+        # LOCKED: Preserve raw v4l2src capture pipeline when scanline glitch is ON.
         src_stage = f"v4l2src device={cfg.source} ! videoconvert ! videoscale ! video/x-raw,width=640,height=480"
+    else:
+        mjpeg_ok = (
+            use_mjpeg
+            if use_mjpeg is not None
+            else (Gst.ElementFactory.find("jpegdec") is not None and device_supports_mjpeg_640x480(cfg.source))
+        )
+        if mjpeg_ok:
+            src_stage = (
+                f"v4l2src device={cfg.source} ! image/jpeg,width=640,height=480 "
+                "! queue max-size-buffers=2 leaky=downstream ! jpegdec ! videoconvert ! video/x-raw,width=640,height=480"
+            )
+        else:
+            src_stage = (
+                f"v4l2src device={cfg.source} ! queue max-size-buffers=2 leaky=downstream "
+                "! videoconvert ! videoscale ! video/x-raw,width=640,height=480"
+            )
 
     flip_method = "horizontal-flip" if cfg.mirror else "none"
     stages = [src_stage, "videoconvert", f"videoflip name=flip method={flip_method}"]
