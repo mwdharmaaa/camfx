@@ -28,6 +28,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hud", action="store_true", help="Enable Studio REC HUD overlay")
     parser.add_argument("--watermark", default="", help="Custom watermark text overlay")
     parser.add_argument("--no-mirror", action="store_true", help="Disable horizontal mirror flip")
+    parser.add_argument(
+        "--no-scanline-glitch",
+        action="store_true",
+        help="Disable raw YUY2 scanline glitch and use clean MJPEG capture",
+    )
     return parser
 
 
@@ -50,6 +55,7 @@ def run_headless(args: argparse.Namespace) -> int:
         source=source,
         effect_id=args.effect if args.effect in EFFECTS_BY_ID else "normal",
         mirror=not args.no_mirror,
+        scanline_glitch=not args.no_scanline_glitch,
         hud_enabled=args.hud,
         watermark_text=args.watermark,
         virtual_device=vcam,
@@ -111,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     from camfx.ui import run_gui
 
     effect_id = args.effect if args.effect in EFFECTS_BY_ID else "normal"
-    return run_gui(initial_effect=effect_id)
+    return run_gui(initial_effect=effect_id, scanline_glitch=not args.no_scanline_glitch)
 
 
 if __name__ == "__main__":

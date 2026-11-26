@@ -21,12 +21,12 @@ from camfx.ui_sidebar import SidebarCallbacks, build_sidebar
 class CamFXWindow(Adw.ApplicationWindow):
     """Main studio window displaying live preview, capture controls, and effect presets."""
 
-    def __init__(self, app: Adw.Application, initial_effect: str = "normal") -> None:
+    def __init__(self, app: Adw.Application, initial_effect: str = "normal", scanline_glitch: bool = True) -> None:
         super().__init__(application=app, title=f"{APP_NAME} - Custom Effect Camera")
         self.set_default_size(1160, 740)
         self.set_size_request(860, 560)
 
-        self._config = PipelineConfig(effect_id=initial_effect)
+        self._config = PipelineConfig(effect_id=initial_effect, scanline_glitch=scanline_glitch)
         self._cameras: List[VideoDevice] = []
         self._virtual_cams: List[VideoDevice] = []
         self._effect_buttons: Dict[str, Gtk.ToggleButton] = {}
@@ -109,6 +109,7 @@ class CamFXWindow(Adw.ApplicationWindow):
             SidebarCallbacks(
                 on_mirror_changed=lambda row, _p: self._pipeline.update_live_adjustments(mirror=row.get_active()),
                 on_hud_changed=lambda row, _p: self._pipeline.update_live_adjustments(hud_enabled=row.get_active()),
+                on_scanline_glitch_changed=self._on_scanline_glitch_changed,
                 on_watermark_changed=lambda row: self._pipeline.update_live_adjustments(watermark_text=row.get_text()),
                 on_sliders_changed=self._on_sliders_changed,
                 on_effect_toggled=self._on_effect_toggled,
@@ -146,7 +147,10 @@ class CamFXWindow(Adw.ApplicationWindow):
     def _restart_pipeline(self) -> None:
         try:
             self._pipeline.start(self._config)
-            self._status_label.set_text(f"Active | Input: {self._config.source} | Effect: {self._config.effect_id}")
+            glitch_state = "ON" if self._config.scanline_glitch else "OFF"
+            self._status_label.set_text(
+                f"Active | Input: {self._config.source} | Effect: {self._config.effect_id} | Scanline Glitch: {glitch_state}"
+            )
         except Exception as exc:
             self._status_label.set_text(f"Error: {exc}")
 
@@ -170,6 +174,12 @@ class CamFXWindow(Adw.ApplicationWindow):
         elif self._config.virtual_device:
             self._vcam_status_label.set_text(f"Virtual Cam OFF ({self._config.virtual_device})")
         self._restart_pipeline()
+
+    def _on_scanline_glitch_changed(self, row: Adw.SwitchRow, _param) -> None:
+        active = row.get_active()
+        if active != self._config.scanline_glitch:
+            self._config.scanline_glitch = active
+            self._restart_pipeline()
 
     def _on_effect_toggled(self, button: Gtk.ToggleButton, effect_id: str) -> None:
         if self._updating_effect_buttons:
@@ -261,18 +271,23 @@ class CamFXWindow(Adw.ApplicationWindow):
 class CamFXApplication(Adw.Application):
     """Libadwaita application wrapper for CamFX."""
 
-    def __init__(self, initial_effect: str = "normal") -> None:
+    def __init__(self, initial_effect: str = "normal", scanline_glitch: bool = True) -> None:
         super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.FLAGS_NONE)
         self._initial_effect = initial_effect
+        self._scanline_glitch = scanline_glitch
         self._window: Optional[CamFXWindow] = None
 
     def do_activate(self) -> None:
         Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK)
         if self._window is None:
-            self._window = CamFXWindow(self, initial_effect=self._initial_effect)
+            self._window = CamFXWindow(
+                self,
+                initial_effect=self._initial_effect,
+                scanline_glitch=self._scanline_glitch,
+            )
         self._window.present()
 
 
-def run_gui(initial_effect: str = "normal") -> int:
+def run_gui(initial_effect: str = "normal", scanline_glitch: bool = True) -> int:
     """Launch the GTK4/Libadwaita GUI."""
-    return CamFXApplication(initial_effect=initial_effect).run([])
+    return CamFXApplication(initial_effect=initial_effect, scanline_glitch=scanline_glitch).run([])

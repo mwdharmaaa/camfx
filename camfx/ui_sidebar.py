@@ -21,6 +21,7 @@ class SidebarCallbacks:
 
     on_mirror_changed: Callable[[Adw.SwitchRow, object], None]
     on_hud_changed: Callable[[Adw.SwitchRow, object], None]
+    on_scanline_glitch_changed: Callable[[Adw.SwitchRow, object], None]
     on_watermark_changed: Callable[[Adw.EntryRow], None]
     on_sliders_changed: Callable[[Gtk.Scale], None]
     on_effect_toggled: Callable[[Gtk.ToggleButton, str], None]
@@ -32,6 +33,7 @@ class SidebarHandles:
 
     widget: Gtk.ScrolledWindow
     effect_buttons: Dict[str, Gtk.ToggleButton]
+    scanline_glitch_row: Adw.SwitchRow
     brightness_scale: Gtk.Scale
     contrast_scale: Gtk.Scale
     saturation_scale: Gtk.Scale
@@ -82,6 +84,14 @@ def build_sidebar(config: PipelineConfig, callbacks: SidebarCallbacks) -> Sideba
     hud_row.connect("notify::active", callbacks.on_hud_changed)
     adj_group.add(hud_row)
 
+    scanline_row = Adw.SwitchRow(
+        title="Scanline Glitch",
+        subtitle="Raw YUY2 motion scanline tearing (off = clean MJPEG)",
+    )
+    scanline_row.set_active(config.scanline_glitch)
+    scanline_row.connect("notify::active", callbacks.on_scanline_glitch_changed)
+    adj_group.add(scanline_row)
+
     wm_row = Adw.EntryRow(title="Watermark Text")
     wm_row.connect("changed", callbacks.on_watermark_changed)
     adj_group.add(wm_row)
@@ -129,6 +139,7 @@ def build_sidebar(config: PipelineConfig, callbacks: SidebarCallbacks) -> Sideba
     return SidebarHandles(
         widget=scroll,
         effect_buttons=effect_buttons,
+        scanline_glitch_row=scanline_row,
         brightness_scale=brightness_scale,
         contrast_scale=contrast_scale,
         saturation_scale=saturation_scale,

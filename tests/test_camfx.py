@@ -178,8 +178,31 @@ class TestCamFXEffects(unittest.TestCase):
         self.assertIsInstance(physical, list)
         self.assertIsInstance(virtual, list)
         import camfx.ui
+        from camfx.ui_sidebar import SidebarCallbacks, build_sidebar
 
         self.assertTrue(hasattr(camfx.ui, "CamFXWindow"))
+
+        gi.require_version("Gtk", "4.0")
+        gi.require_version("Adw", "1")
+        from gi.repository import Adw, Gtk
+
+        if Gtk.init_check():
+            Adw.init()
+            observed: list[bool] = []
+            handles = build_sidebar(
+                PipelineConfig(scanline_glitch=True),
+                SidebarCallbacks(
+                    on_mirror_changed=lambda *_: None,
+                    on_hud_changed=lambda *_: None,
+                    on_scanline_glitch_changed=lambda row, _p: observed.append(row.get_active()),
+                    on_watermark_changed=lambda *_: None,
+                    on_sliders_changed=lambda *_: None,
+                    on_effect_toggled=lambda *_: None,
+                ),
+            )
+            self.assertTrue(handles.scanline_glitch_row.get_active())
+            handles.scanline_glitch_row.set_active(False)
+            self.assertEqual(observed, [False])
 
     def test_cli_flags_and_parser(self) -> None:
         args = build_parser().parse_args(["--headless", "--effect", "cyberpunk", "--hud", "--watermark", "Live"])
@@ -187,6 +210,10 @@ class TestCamFXEffects(unittest.TestCase):
         self.assertEqual(args.effect, "cyberpunk")
         self.assertTrue(args.hud)
         self.assertEqual(args.watermark, "Live")
+        self.assertFalse(args.no_scanline_glitch)
+
+        clean_args = build_parser().parse_args(["--no-scanline-glitch"])
+        self.assertTrue(clean_args.no_scanline_glitch)
 
         env = dict(os.environ)
         env["PYTHONPATH"] = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
